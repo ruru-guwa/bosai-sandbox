@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>数当てゲーム (1〜20)</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <main class="container">
+    <h1>数当てゲーム (1〜20)</h1>
+    <p>1〜20の整数を当ててください。</p>
+
+    <div class="controls">
+      <input id="guess" type="number" min="1" max="20" placeholder="1〜20" />
+      <button id="submit">判定</button>
+      <button id="reset" class="secondary">リセット</button>
+    </div>
+
+    <div id="message" role="status" aria-live="polite" class="message"></div>
+  </main>
+
+  <script src="script.js"></script>
+  <noscript>JavaScriptを有効にしてください。</noscript>
+  </body>
+  </html>
+
+
