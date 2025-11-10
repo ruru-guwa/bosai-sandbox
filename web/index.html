@@ -8,8 +8,25 @@
 </head>
 <body>
   <main class="container">
-    <h1>数当てゲーム (1〜20)</h1>
-    <p>1〜20の整数を当ててください。</p>
+    <header class="hero">
+      <h1>🎯 数当てチャレンジ (1〜20)</h1>
+      <p id="tip" class="tip">1〜20の整数を当ててください。</p>
+    </header>
+
+    <section class="status" aria-live="polite">
+      <div>
+        <span class="label">挑戦回数</span>
+        <span id="attempts" class="value">0</span>
+      </div>
+      <div>
+        <span class="label">ベスト</span>
+        <span id="best" class="value">--</span>
+      </div>
+      <div>
+        <span class="label">ムード</span>
+        <span id="mood" class="value">😊</span>
+      </div>
+    </section>
 
     <div class="controls">
       <input id="guess" type="number" min="1" max="20" placeholder="1〜20" />
@@ -18,6 +35,25 @@
     </div>
 
     <div id="message" role="status" aria-live="polite" class="message"></div>
+
+    <section class="history" aria-live="polite">
+      <h2>📝 プレイログ</h2>
+      <ul id="history" class="history-list"></ul>
+    </section>
+
+    <div id="celebration" class="celebration" aria-hidden="true">
+      <div class="stickman">
+        <span class="head"></span>
+        <span class="body"></span>
+        <span class="arm left"></span>
+        <span class="arm right"></span>
+        <span class="leg left"></span>
+        <span class="leg right"></span>
+      </div>
+      <p class="celebration-text">やったね！ダンスパーティー！</p>
+    </div>
+
+    <div id="confetti" aria-hidden="true"></div>
   </main>
 
   <script src="script.js"></script>
