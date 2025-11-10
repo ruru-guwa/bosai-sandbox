@@ -9,8 +9,8 @@
 ---
 
 ## 1. Executive Summary / エグゼクティブサマリー
-Transform the single-player browser guessing game into a synchronous multiplayer experience (up to four players) with shared real-time state for turns, guesses, and celebrations.  
-現行のシングルプレイヤー向けブラウザゲームを最大4人同時の同期型マルチプレイに拡張し、ターン・推測・祝福演出をリアルタイムで共有できるようにする。
+Transform the single-player browser guessing game into a synchronous multiplayer experience (up to four players) backed by Firebase (Authentication, Firestore/Realtime Database, Cloud Functions) so remote players share real-time state for turns, guesses, and celebrations.  
+現行のシングルプレイヤー向けブラウザゲームをFirebase（認証、Firestore／Realtime Database、Cloud Functions）で支えられた最大4人同時の同期型マルチプレイへ拡張し、遠隔プレイヤー同士でターン・推測・祝福演出をリアルタイム共有できるようにする。
 
 ---
 
@@ -19,8 +19,8 @@ Transform the single-player browser guessing game into a synchronous multiplayer
   2〜4人が同じロビーで順番にターンを回せるようにする。  
 - Preserve the playful UI (confetti, dancing stickman) in a multiplayer context.  
   紙吹雪やダンシング棒人間など既存の楽しい演出をマルチプレイ仕様に適合させる。  
-- Provide low-latency synchronized updates across all clients.  
-  低遅延で各クライアントに状態更新を同期させる。  
+- Provide low-latency synchronized updates across all clients via Firebase real-time sync.  
+  Firebaseのリアルタイム同期を活用し、低遅延で各クライアントに状態更新を届ける。  
 - Maintain responsive, accessible, friendly UX on desktop and mobile.  
   デスクトップ・モバイルを問わずレスポンシブで親しみやすいUXを実現する。
 
@@ -51,16 +51,16 @@ Transform the single-player browser guessing game into a synchronous multiplayer
 ### 5.1 In Scope / 対象範囲
 1. Lobby creation and join flow (player name + code/link).  
    プレイヤー名とコード／リンクによるロビー作成・参加フロー。  
-2. Turn management for up to four players, including answer generation.  
-   最大4人までのターン管理と正解数値の生成。  
-3. Real-time broadcast of guesses, results, and celebratory effects.  
-   推測・結果・祝福演出のリアルタイム共有。  
-4. Round restart without reloading the page while retaining players.  
-   ページ再読み込みなしで同じメンバーによるラウンド再開。  
-5. Local storage of best scores per device.  
-   端末ごとのベストスコアをローカル保存。  
-6. Optional quick reactions (cheer/boo) if time allows.  
-   余力があればリアクション（歓声／ブーイング）を追加。
+2. Turn management for up to four players, including answer generation executed securely in Cloud Functions.  
+   最大4人までのターン管理とCloud Functions上で安全に実行される正解数値の生成。  
+3. Real-time broadcast of guesses, results, and celebratory effects through Firestore/Realtime Database listeners.  
+   Firestore／Realtime Databaseのリスナーを通じて推測・結果・祝福演出をリアルタイム共有。  
+4. Round restart without reloading the page while retaining players, driven by shared Firebase state.  
+   Firebase共有状態を用い、ページ再読み込みなしで同じメンバーによるラウンド再開。  
+5. Local storage of best scores per device plus optional sync to user profiles.  
+   端末ごとのベストスコア保存と、必要に応じたユーザープロフィールへの同期。  
+6. Optional quick reactions (cheer/boo) if time allows (stored as lightweight Firestore documents).  
+   余力があればリアクション（歓声／ブーイング）を追加し、軽量なFirestoreドキュメントとして保存。
 
 ### 5.2 Out of Scope / 対象外
 - Ranked matchmaking, persistent accounts.  
@@ -74,39 +74,45 @@ Transform the single-player browser guessing game into a synchronous multiplayer
 
 ## 6. Functional Requirements / 機能要件
 1. **Lobby Management / ロビー管理**  
-   - Host creates lobby; generate shareable code/link.  
-     ホストがロビーを作成し、共有用コード／リンクを生成する。  
-   - Display joined players, enforce max four seats, optionally lock when game starts.  
-     参加プレイヤーを表示し、最大4人までに制限、ゲーム開始後はロック可能。  
+   - Host creates lobby document in Firestore/Realtime Database; generate shareable code/link.  
+     ホストがFirestore／Realtime Databaseにロビードキュメントを作成し、共有コード／リンクを生成する。  
+   - Display joined players from the lobby document, enforce max four seats, optionally lock when game starts.  
+     ロビードキュメントに基づき参加者を表示し、最大4人までに制限、ゲーム開始時にロック可能。  
 2. **Gameplay Flow / ゲーム進行**  
-   - Server generates secret number at round start.  
-     ラウンド開始時にサーバーが正解を生成する。  
-   - Only active player may submit guesses; others see a waiting state.  
-     手番のプレイヤーのみ入力可能、他プレイヤーは待機表示。  
-   - Broadcast guess + result, rotate turns when incorrect.  
-     推測と結果を共有し、不正解ならターンを進める。  
-   - Correct guess triggers win announcement, confetti, stickman dance, disables further input.  
-     正解時は勝者通知・紙吹雪・棒人間ダンスを発動し入力受付を停止。  
-   - Host (or vote) can start new round without leaving lobby.  
-     ホスト（または投票）でロビーを維持したままラウンドを再開可能。  
+   - Cloud Function generates secret number at round start and writes to secured field.  
+     ラウンド開始時にCloud Functionsが正解数字を生成し、保護されたフィールドに書き込む。  
+   - Only active player (validated via security rules/Function) may submit guesses; others see waiting state.  
+     アクティブプレイヤーのみ（セキュリティルール／Functionsで検証）推測を送信でき、他は待機表示。  
+   - Broadcast guess + result through database updates; Functions rotate turn index when incorrect.  
+     推測結果をデータベース更新で共有し、不正解時はFunctionsがターンを更新。  
+   - Correct guess triggers win flag, confetti, stickman dance, disables further input until reset.  
+     正解時は勝利フラグを立て、紙吹雪・棒人間ダンスを発動しリセットまで入力を停止。  
+   - Host (or vote) can invoke a Function to start a new round without leaving lobby.  
+     ホスト（または投票）がFunctionsを呼び出してロビーを維持したまま新ラウンドを開始。  
 3. **State & History / 状態と履歴**  
-   - Display per-player attempts, wins, and running guess log.  
-     プレイヤーごとの試行回数・勝利数・推測履歴を表示。  
-   - Maintain history until round reset; highlight current round.  
-     ラウンドリセットまで履歴保持、現行ラウンドを識別表示。  
+   - Display per-player attempts, wins, and guess log stored in Firestore collections/subcollections.  
+     Firestoreのコレクション／サブコレクションに格納された試行回数・勝利数・推測履歴を表示。  
+   - History persists until round reset document is updated; highlight current round.  
+     ラウンドリセット用ドキュメント更新まで履歴を保持し、現行ラウンドを表示。  
 4. **Edge Cases / 例外処理**  
-   - Handle disconnects gracefully; auto-advance after configurable timeout.  
-     切断時は一定時間後に自動でターンを進める。  
-   - Allow rejoin if lobby still active.  
-     ロビーが存続していれば再参加を許可。  
-   - Prevent guess spamming; server validates turn ownership.  
-     推測スパムを防ぎ、サーバー側で手番を検証。
+   - Handle disconnects gracefully; Cloud Functions advance turn after configurable timeout stored in the lobby document.  
+     切断時はロビードキュメントに保存されたタイムアウト値に基づきCloud Functionsが自動でターンを進める。  
+   - Allow rejoin via lobby code if lobby still active; security rules prevent duplicate seats.  
+     ロビーが有効であればコードで再参加でき、セキュリティルールにより重複席を防ぐ。  
+   - Prevent guess spamming via Firebase security rules and server-side validation.  
+     Firebaseセキュリティルールとサーバー側検証で推測スパムを抑制する。
 
 ---
 
 ## 7. Non-Functional Requirements / 非機能要件
-- Real-time transport via WebSocket (FastAPI or equivalent).  
-  FastAPI等によるWebSocket通信でリアルタイム同期。  
+- Real-time sync via Firebase Firestore listeners or Realtime Database subscriptions.  
+  Firebase Firestoreのリスナー／Realtime Databaseの購読でリアルタイム同期を実現。  
+- Hosting on Firebase Hosting or equivalent CDN-backed static hosting.  
+  Firebase HostingまたはCDN対応の静的ホスティングで配信。  
+- Ability to support ~100 concurrent lobbies using Firebase’s managed scalability.  
+  Firebaseのマネージドスケーラビリティで約100ロビーの同時稼働に対応。  
+- Enforce security via Firebase Authentication + Security Rules + Cloud Functions.  
+  Firebase Authenticationとセキュリティルール、Cloud Functionsで安全性を確保。  
 - Local dev friendly; deployable to Render/Heroku/Fly.  
   ローカルでの開発が容易で、Render/Heroku/Flyへデプロイ可能。  
 - Target ~100 concurrent lobbies with minimal tuning.  
@@ -117,22 +123,26 @@ Transform the single-player browser guessing game into a synchronous multiplayer
 ---
 
 ## 8. Dependencies & Integrations / 依存関係
-- Python backend (FastAPI, WebSocket support).  
-  Python製バックエンド（FastAPI＋WebSocket対応）。  
-- Vanilla JS front-end (existing assets extended).  
-  既存のプレーンJSフロントエンドを拡張。  
-- Optional: Socket.IO client/server, Redis (for scaling).  
-  任意：Socket.IO、Redisなどのスケール向け拡張。
+- Firebase Authentication for player identity (anonymous or nickname-based).  
+  プレイヤーID管理としてFirebase Authentication（匿名またはニックネームベース）を使用。  
+- Firebase Firestore or Realtime Database for lobby/game state.  
+  ロビー／ゲーム状態の保存にFirebase FirestoreまたはRealtime Databaseを利用。  
+- Firebase Cloud Functions for authoritative operations (secret generation, turn validation).  
+  Cloud Functionsで正解生成やターン検証などの権威的処理を実行。  
+- Vanilla JS front-end extended with Firebase Web SDK.  
+  Firebase Web SDKを組み込んだプレーンJSフロントエンド。
 
 ---
 
 ## 9. Risks & Mitigations / リスクと対策
 | Risk / リスク | Mitigation / 対策 |
 | -------------- | ----------------- |
-| WebSocket complexity | Follow proven samples; build incrementally. |
-| WebSocket実装の複雑さ | 実績あるサンプルに基づき段階的に構築。 |
-| UI state drift across clients | Server authoritative updates only. |
-| クライアント間の状態ずれ | サーバーを唯一の権威とし通知で同期。 |
+| Firebase quota limits | Monitor usage, enable Blaze plan alerts early. |
+| Firebaseのクォータ制限 | 利用状況を監視し、Blazeプランのアラートを早期設定。 |
+| Security rules complexity | Define clear rule sets, use emulator suite for testing. |
+| セキュリティルールの複雑さ | ルールを明確化し、エミュレーターでテストする。 |
+| UI state drift across clients | Derive state exclusively from Firebase listeners. |
+| クライアント間の状態ずれ | Firebaseリスナーからの状態のみでUIを更新。 |
 | Disconnect handling | Implement timeout + reconnection tokens. |
 | 切断対応 | タイムアウトと再接続トークンを導入。 |
 | Mobile performance / animations | Respect `prefers-reduced-motion`, throttle confetti. |
@@ -141,33 +151,33 @@ Transform the single-player browser guessing game into a synchronous multiplayer
 ---
 
 ## 10. Rollout Plan / ロールアウト計画
-1. Backend scaffold (REST + WebSocket) setup.  
-   バックエンド骨組み（REST＋WebSocket）を構築。  
-2. Front-end lobby UI and state integration.  
-   フロントエンドのロビーUIと状態連携を実装。  
-3. Turn logic & real-time broadcasting.  
-   ターンロジックとリアルタイム通知を完成。  
-4. QA (multi-tab/device), network simulation.  
-   複数タブ／デバイスでQA、ネットワーク遅延も検証。  
-5. Documentation updates (`docs/`, README).  
-   ドキュメント（`docs/`やREADME）を更新。
+1. Firebase project setup (Authentication, Firestore/Realtime Database, Hosting).  
+   Firebaseプロジェクトを構築し、Authentication・Firestore／Realtime Database・Hostingを設定する。  
+2. Implement Cloud Functions for lobby lifecycle (create/start/reset) and guess validation.  
+   ロビーライフサイクル（作成／開始／リセット）と推測検証を行うCloud Functionsを実装する。  
+3. Front-end lobby UI integration with Firebase Web SDK (Auth + database listeners).  
+   フロントエンドでFirebase Web SDK（Auth＋データベースリスナー）を用いてロビーUIを統合。  
+4. Configure security rules, run emulator-based QA (multi-tab/device, offline scenarios).  
+   セキュリティルールを設定し、エミュレーターで複数タブ／デバイスやオフラインシナリオのQAを実施。  
+5. Deploy to Firebase Hosting and update documentation (`docs/`, README).  
+   Firebase Hostingへデプロイし、ドキュメント（`docs/`やREADME）を更新する。
 
 ---
 
 ## 11. Open Questions / 未決事項
-1. Should we enforce a turn timer? Default duration?  
-   ターン制限時間は必要か？標準時間は？  
-2. Host leaves—auto-promote next player or dissolve lobby?  
-   ホスト離脱時は次のプレイヤーを昇格させるかロビーを解散するか？  
-3. Allow spectators or keep strictly player-only?  
-   観戦モードを許可すべきか、プレイヤー限定にするか？  
-4. Persist lobby after inactivity? For how long?  
-   非アクティブ時でもロビーを残すか？残すなら時間は？
+1. Turn timer enforced via Cloud Functions? Default duration?  
+   Cloud Functionsでターンタイマーを強制するか？標準時間は？  
+2. Host leaves—auto-promote next player or dissolve lobby within Firebase rules?  
+   Firebase上でホスト離脱時に次プレイヤーを昇格させるか、ロビーを解散するか？  
+3. Allow spectators or keep player-only? How to represent spectators in data model?  
+   観戦モードを許可するか、データモデルでどう表現するか？  
+4. Persist lobby after inactivity? How to clean stale documents with Cloud Functions?  
+   非アクティブ時でもロビーを残すか？Cloud Functionsでどのように古いドキュメントを削除するか？
 
 ---
 
 ## 12. Appendices / 付録
 - Existing single-player game assets remain the base for UI styling.  
   既存のシングルプレイ資産をUIの基礎として活用。  
-- Future features (bots, ranking) intentionally omitted from this scope.  
-  今回のスコープからはボットやランキング等を明示的に除外している。
+- Future features (bots, ranking) intentionally omitted; Firebase architecture can extend later.  
+  将来的なボットやランキング機能はスコープ外だが、Firebaseアーキテクチャで拡張可能。
